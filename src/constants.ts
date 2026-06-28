@@ -1,6 +1,6 @@
 import type { AcceptedMime, FigureStyle } from './types'
 
-export const APP_NAME = 'Layout Assistant'
+export const APP_NAME = '论文图片排版助手'
 export const SCHEMA_VERSION = 1 as const
 export const CANVAS_WIDTH = 1200
 export const MIN_PANEL_COUNT = 2

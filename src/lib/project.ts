@@ -5,12 +5,13 @@ import type {
   PanelState,
   StoredFigureProjectV1,
 } from '../types'
+import { createId } from './browser-crypto'
 
 export function createEmptyProject(): FigureProjectV1 {
   const now = new Date().toISOString()
   return {
     schemaVersion: SCHEMA_VERSION,
-    id: crypto.randomUUID(),
+    id: createId(),
     title: '未命名 Figure',
     createdAt: now,
     updatedAt: now,

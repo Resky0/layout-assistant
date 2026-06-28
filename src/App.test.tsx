@@ -1,12 +1,31 @@
 import './test/setup'
-import { render, screen, waitFor } from '@testing-library/react'
+import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import App from './App'
 
-describe('Layout Assistant app', () => {
+describe('论文图片排版助手', () => {
+  beforeEach(() => {
+    window.history.replaceState(null, '', '/')
+  })
+
+  afterEach(() => {
+    cleanup()
+  })
+
+  it('opens the editor from the landing page', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    expect(screen.getByRole('heading', { name: /让科研排图/ })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /立即开始/ }))
+
+    expect(screen.getByTestId('image-input')).toBeInTheDocument()
+  })
+
   it('imports six images and presents three layout candidates', async () => {
     const user = userEvent.setup()
+    window.history.replaceState(null, '', '/#editor')
     render(<App />)
     const files = Array.from(
       { length: 6 },

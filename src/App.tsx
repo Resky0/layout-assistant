@@ -3,6 +3,7 @@ import { CandidatePicker } from './components/CandidatePicker'
 import { FigureCanvas } from './components/FigureCanvas'
 import { ImageSidebar } from './components/ImageSidebar'
 import { InspectorPanel } from './components/InspectorPanel'
+import { LandingPage } from './components/LandingPage'
 import { MIN_PANEL_COUNT } from './constants'
 import { useProjectHistory } from './hooks/useProjectHistory'
 import { createPngBlob, createSvgBlob, downloadBlob } from './lib/export'
@@ -35,7 +36,11 @@ function revokeProjectUrls(project: FigureProjectV1) {
   project.assets.forEach((asset) => URL.revokeObjectURL(asset.previewUrl))
 }
 
-export default function App() {
+interface EditorAppProps {
+  onHome: () => void
+}
+
+function EditorApp({ onHome }: EditorAppProps) {
   const {
     project,
     commit,
@@ -368,16 +373,16 @@ export default function App() {
   return (
     <div className="app-shell">
       <div className="mobile-blocker">
-        <strong>请在电脑上使用 Layout Assistant</strong>
+        <strong>请在电脑上使用论文图片排版助手</strong>
         <span>当前 MVP 针对 1024px 以上的桌面屏幕设计。</span>
       </div>
 
       <header className="topbar">
         <div className="brand-block">
-          <span className="brand-mark" aria-hidden="true">LA</span>
+          <img className="brand-mark" src="/icon.svg" alt="" />
           <div>
-            <strong>Layout Assistant</strong>
-            <span>科研多面板排图</span>
+            <strong>论文图片排版助手</strong>
+            <span>本地科研多面板排图</span>
           </div>
         </div>
         <input
@@ -389,6 +394,7 @@ export default function App() {
           }
         />
         <div className="topbar-actions">
+          <button type="button" onClick={onHome}>首页</button>
           <span className="save-status"><i />{saveStatus}</span>
           <button type="button" onClick={undo} disabled={!canUndo} title="撤销">
             ↶ <span>撤销</span>
@@ -526,4 +532,49 @@ export default function App() {
       </main>
     </div>
   )
+}
+
+function pageFromHash() {
+  return window.location.hash === '#editor' ? 'editor' : 'landing'
+}
+
+export default function App() {
+  const [page, setPage] = useState(pageFromHash)
+
+  useEffect(() => {
+    const syncPage = () => setPage(pageFromHash())
+    window.addEventListener('hashchange', syncPage)
+    return () => window.removeEventListener('hashchange', syncPage)
+  }, [])
+
+  useEffect(() => {
+    const isLanding = page === 'landing'
+    document.documentElement.classList.toggle('landing-active', isLanding)
+    document.body.classList.toggle('landing-active', isLanding)
+    document.title = isLanding
+      ? '论文图片排版助手 - 本地科研多面板排图'
+      : '论文图片排版助手 - 排图工作台'
+    if (isLanding) {
+      document.documentElement.scrollTop = 0
+      document.body.scrollTop = 0
+    }
+    return () => {
+      document.documentElement.classList.remove('landing-active')
+      document.body.classList.remove('landing-active')
+    }
+  }, [page])
+
+  const openEditor = () => {
+    window.location.hash = 'editor'
+    setPage('editor')
+  }
+
+  const openLanding = () => {
+    window.history.pushState(null, '', `${window.location.pathname}${window.location.search}`)
+    setPage('landing')
+  }
+
+  return page === 'editor'
+    ? <EditorApp onHome={openLanding} />
+    : <LandingPage onStart={openEditor} />
 }

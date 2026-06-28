@@ -1,4 +1,10 @@
-# Layout Assistant
+<p align="center">
+  <img src="public/icon.svg" width="88" alt="论文图片排版助手图标" />
+</p>
+
+# 论文图片排版助手
+
+> Paper Figure Layout Assistant
 
 一个本地优先、面向科研论文的多面板图片排版工具。导入图片后即可生成多种确定性布局，完成面板微调，并导出高清 PNG、可编辑 SVG 或可恢复的 `.figgrid` 工程文件。
 
@@ -8,21 +14,25 @@ A local-first multi-panel figure composer for scientific papers. Import images, 
 
 ## 界面预览
 
+### 网站首页
+
+![论文图片排版助手网站首页](docs/screenshots/homepage.png)
+
 ### 六宫格：紧凑比例自适应
 
-![Layout Assistant 六宫格界面](docs/screenshots/six-panel-workspace.png)
+![论文图片排版助手六宫格界面](docs/screenshots/six-panel-workspace.png)
 
 ### 九宫格：经典网格
 
-![Layout Assistant 九宫格界面](docs/screenshots/nine-panel-workspace.png)
+![论文图片排版助手九宫格界面](docs/screenshots/nine-panel-workspace.png)
 
 ---
 
 ## 中文说明
 
-### 为什么使用 Layout Assistant？
+### 为什么使用论文图片排版助手？
 
-科研图片排版经常需要在 PowerPoint、Illustrator 或其他绘图软件中反复调整尺寸、间距和标签。Layout Assistant 把最常见的流程压缩成四步：
+科研图片排版经常需要在 PowerPoint、Illustrator 或其他绘图软件中反复调整尺寸、间距和标签。论文图片排版助手把最常见的流程压缩成四步：
 
 1. 导入 2–12 张图片。
 2. 从三种自动布局中选择一个起点。
@@ -45,6 +55,8 @@ A local-first multi-panel figure composer for scientific papers. Import images, 
 - **隐私优先**：无后端、无账号、无遥测，运行期间不会上传图片。
 
 ### 使用方法
+
+打开网站后，点击“立即开始”进入排图工作台。
 
 #### 1. 导入图片
 
@@ -160,9 +172,9 @@ e2e/                    Playwright 浏览器测试与视觉快照
 
 ## English
 
-### Why Layout Assistant?
+### Why Paper Figure Layout Assistant?
 
-Composing scientific figures often means repeatedly resizing panels, aligning gaps, and updating labels in PowerPoint, Illustrator, or similar tools. Layout Assistant condenses that workflow into four steps:
+Composing scientific figures often means repeatedly resizing panels, aligning gaps, and updating labels in PowerPoint, Illustrator, or similar tools. Paper Figure Layout Assistant condenses that workflow into four steps:
 
 1. Import 2–12 images.
 2. Choose one of three generated layouts.
@@ -185,6 +197,8 @@ Everything runs locally in the browser. No account, backend, telemetry, or image
 - **Local-first privacy:** imported images never leave the browser.
 
 ### How to use
+
+Open the website and select **Start now** to enter the figure editor.
 
 #### 1. Import images
 
@@ -280,3 +294,9 @@ The browser suite covers six-panel PNG export, nine-panel layout, invalid-file f
 ### MVP limitations
 
 TIFF, PDF/PPTX export, journal-specific mm/DPI presets, raw microscopy data, freeform canvas editing, scale bars, AI layout, cloud sync, and collaboration are intentionally out of scope.
+
+## License
+
+本项目采用 [MIT License](LICENSE) 开源，可自由使用、修改和分发，但需保留原始版权与许可声明。
+
+This project is open sourced under the [MIT License](LICENSE). You may use, modify, and distribute it while retaining the original copyright and license notice.

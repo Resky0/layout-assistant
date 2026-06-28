@@ -12,18 +12,12 @@ import type {
   ImageAsset,
   ProjectManifestAsset,
 } from '../types'
+import { sha256Hex } from './browser-crypto'
 
 function extensionForMime(mime: AcceptedMime) {
   if (mime === 'image/png') return 'png'
   if (mime === 'image/webp') return 'webp'
   return 'jpg'
-}
-
-async function sha256(blob: Blob) {
-  const digest = await crypto.subtle.digest('SHA-256', await blob.arrayBuffer())
-  return [...new Uint8Array(digest)]
-    .map((byte) => byte.toString(16).padStart(2, '0'))
-    .join('')
 }
 
 function blobFromBytes(bytes: Uint8Array, mime: string) {
@@ -49,7 +43,7 @@ export async function createFiggridBundle(
       height: asset.height,
       size: asset.size,
       path,
-      sha256: await sha256(asset.blob),
+      sha256: await sha256Hex(asset.blob),
     })
   }
 
@@ -130,7 +124,7 @@ export async function readFiggridBundle(file: File): Promise<FigureProjectV1> {
       throw new Error(`资源大小校验失败：${entry.name}`)
     }
     const blob = blobFromBytes(bytes, entry.mime)
-    if ((await sha256(blob)) !== entry.sha256) {
+    if ((await sha256Hex(blob)) !== entry.sha256) {
       throw new Error(`资源完整性校验失败：${entry.name}`)
     }
     assets.push({

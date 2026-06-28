@@ -29,6 +29,18 @@ function imageFiles(count: number) {
   }))
 }
 
+test('landing page introduces the product and opens the editor', async ({ page }) => {
+  await page.goto('/')
+  await expect(page.getByRole('heading', { name: /让科研排图/ })).toBeVisible()
+  await expect(page.locator('.landing-hero')).toHaveScreenshot('landing-hero.png', {
+    animations: 'disabled',
+  })
+  await page.getByRole('button', { name: /立即开始/ }).click()
+  await expect(page.locator('.workspace')).toBeVisible()
+  await expect(page.getByTestId('image-input')).toBeAttached()
+  await expect(page).toHaveURL(/#editor$/)
+})
+
 test('six-panel workflow exports a PNG without external requests', async ({ page }) => {
   const externalRequests: string[] = []
   page.on('request', (request) => {
@@ -38,7 +50,7 @@ test('six-panel workflow exports a PNG without external requests', async ({ page
     }
   })
 
-  await page.goto('/')
+  await page.goto('/#editor')
   await page.getByTestId('image-input').setInputFiles(imageFiles(6))
   await expect(page.getByText('6 \u4e2a\u9762\u677f')).toBeVisible()
   await expect(page.getByRole('button', { name: /\u7d27\u51d1\u81ea\u9002\u5e94/ })).toBeVisible()
@@ -70,7 +82,7 @@ test('six-panel workflow exports a PNG without external requests', async ({ page
 })
 
 test('nine-panel workflow keeps three candidates and stable visuals', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/#editor')
   await page.getByTestId('image-input').setInputFiles(imageFiles(9))
   await expect(page.getByText('9 \u4e2a\u9762\u677f')).toBeVisible()
   await expect(page.locator('.candidate-card')).toHaveCount(3)
@@ -80,7 +92,7 @@ test('nine-panel workflow keeps three candidates and stable visuals', async ({ p
 })
 
 test('unsupported files show a clear validation error', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/#editor')
   await page.getByTestId('image-input').setInputFiles({
     name: 'notes.txt',
     mimeType: 'text/plain',

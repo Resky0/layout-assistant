@@ -6,6 +6,7 @@ import {
   MAX_TOTAL_BYTES,
 } from '../constants'
 import type { AcceptedMime, ImageAsset } from '../types'
+import { createId } from './browser-crypto'
 
 export interface ImageImportResult {
   assets: ImageAsset[]
@@ -65,7 +66,7 @@ export async function importImageFiles(
         errors.push(`${file.name}：图片超过 4000 万像素。`)
         continue
       }
-      const id = crypto.randomUUID()
+      const id = createId()
       assets.push({
         id,
         name: file.name,
