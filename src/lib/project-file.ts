@@ -8,11 +8,13 @@ import {
 import type {
   AcceptedMime,
   FiggridManifestV1,
-  FigureProjectV1,
+  FiggridManifestV2,
+  FigureProjectV2,
   ImageAsset,
   ProjectManifestAsset,
 } from '../types'
 import { sha256Hex } from './browser-crypto'
+import { migrateFigureStyle } from './project'
 
 function extensionForMime(mime: AcceptedMime) {
   if (mime === 'image/png') return 'png'
@@ -27,7 +29,7 @@ function blobFromBytes(bytes: Uint8Array, mime: string) {
 }
 
 export async function createFiggridBundle(
-  project: FigureProjectV1,
+  project: FigureProjectV2,
 ): Promise<Blob> {
   const files: Record<string, Uint8Array> = {}
   const manifestAssets: ProjectManifestAsset[] = []
@@ -47,7 +49,7 @@ export async function createFiggridBundle(
     })
   }
 
-  const manifest: FiggridManifestV1 = {
+  const manifest: FiggridManifestV2 = {
     ...project,
     assets: manifestAssets,
   }
@@ -60,15 +62,38 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }
 
-function validateManifest(value: unknown): asserts value is FiggridManifestV1 {
-  if (!isRecord(value) || value.schemaVersion !== SCHEMA_VERSION) {
+function validateManifest(
+  value: unknown,
+): asserts value is FiggridManifestV1 | FiggridManifestV2 {
+  if (
+    !isRecord(value) ||
+    (value.schemaVersion !== 1 && value.schemaVersion !== SCHEMA_VERSION)
+  ) {
     throw new Error('工程文件版本不受支持。')
   }
   if (!Array.isArray(value.assets) || value.assets.length > MAX_PANEL_COUNT) {
     throw new Error('工程中的图片数量无效。')
   }
-  if (!Array.isArray(value.panelOrder) || !isRecord(value.panels)) {
+  if (
+    !Array.isArray(value.panelOrder) ||
+    !isRecord(value.panels) ||
+    !isRecord(value.style)
+  ) {
     throw new Error('工程文件缺少面板信息。')
+  }
+  if (
+    value.schemaVersion === 2 &&
+    (
+      !['arial', 'times', 'georgia', 'verdana'].includes(String(value.style.labelFont)) ||
+      ![400, 600, 700].includes(Number(value.style.labelWeight)) ||
+      !['top-left', 'top-right', 'bottom-left', 'bottom-right'].includes(
+        String(value.style.labelPosition),
+      ) ||
+      typeof value.style.labelOffsetX !== 'number' ||
+      typeof value.style.labelOffsetY !== 'number'
+    )
+  ) {
+    throw new Error('工程文件包含无效的标签设置。')
   }
   for (const asset of value.assets) {
     if (
@@ -89,7 +114,7 @@ function validateManifest(value: unknown): asserts value is FiggridManifestV1 {
   }
 }
 
-export async function readFiggridBundle(file: File): Promise<FigureProjectV1> {
+export async function readFiggridBundle(file: File): Promise<FigureProjectV2> {
   if (file.size > MAX_TOTAL_BYTES + 10 * 1024 * 1024) {
     throw new Error('工程文件过大。')
   }
@@ -111,7 +136,11 @@ export async function readFiggridBundle(file: File): Promise<FigureProjectV1> {
     throw new Error('工程清单不是有效的 JSON。')
   }
   validateManifest(manifestValue)
-  const manifest = manifestValue
+  const manifest: FiggridManifestV2 = {
+    ...manifestValue,
+    schemaVersion: SCHEMA_VERSION,
+    style: migrateFigureStyle(manifestValue.style),
+  }
 
   let totalBytes = 0
   const assets: ImageAsset[] = []

@@ -1,7 +1,14 @@
 export type AcceptedMime = 'image/png' | 'image/jpeg' | 'image/webp'
 export type ImageFit = 'contain' | 'cover'
 export type LabelMode = 'uppercase' | 'lowercase' | 'none'
-export type LabelPosition = 'top-left' | 'top-right'
+export type LabelFont = 'arial' | 'times' | 'georgia' | 'verdana'
+export type LabelWeight = 400 | 600 | 700
+export type LabelPosition =
+  | 'top-left'
+  | 'top-right'
+  | 'bottom-left'
+  | 'bottom-right'
+export type LabelPositionV1 = Extract<LabelPosition, 'top-left' | 'top-right'>
 export type LayoutKind = 'equal-grid' | 'justified'
 export type LayoutProfile = 'classic' | 'compact' | 'balanced'
 
@@ -31,16 +38,26 @@ export interface FigureStyle {
   background: '#ffffff' | 'transparent'
   labelMode: LabelMode
   labelPosition: LabelPosition
+  labelFont: LabelFont
+  labelWeight: LabelWeight
+  labelOffsetX: number
+  labelOffsetY: number
   labelSize: number
   labelColor: string
+}
+
+export interface FigureStyleV1 extends Omit<
+  FigureStyle,
+  'labelPosition' | 'labelFont' | 'labelWeight' | 'labelOffsetX' | 'labelOffsetY'
+> {
+  labelPosition: LabelPositionV1
 }
 
 export interface ExportSettings {
   width: number
 }
 
-export interface FigureProjectV1 {
-  schemaVersion: 1
+interface FigureProjectCore {
   id: string
   title: string
   createdAt: string
@@ -49,8 +66,17 @@ export interface FigureProjectV1 {
   panelOrder: string[]
   panels: Record<string, PanelState>
   layoutProfile: LayoutProfile
-  style: FigureStyle
   exportSettings: ExportSettings
+}
+
+export interface FigureProjectV1 extends FigureProjectCore {
+  schemaVersion: 1
+  style: FigureStyleV1
+}
+
+export interface FigureProjectV2 extends FigureProjectCore {
+  schemaVersion: 2
+  style: FigureStyle
 }
 
 export interface LayoutCandidate {
@@ -94,6 +120,10 @@ export interface StoredFigureProjectV1 extends Omit<FigureProjectV1, 'assets'> {
   assets: StoredImageAsset[]
 }
 
+export interface StoredFigureProjectV2 extends Omit<FigureProjectV2, 'assets'> {
+  assets: StoredImageAsset[]
+}
+
 export interface ProjectManifestAsset {
   id: string
   name: string
@@ -108,3 +138,36 @@ export interface ProjectManifestAsset {
 export interface FiggridManifestV1 extends Omit<FigureProjectV1, 'assets'> {
   assets: ProjectManifestAsset[]
 }
+
+export interface FiggridManifestV2 extends Omit<FigureProjectV2, 'assets'> {
+  assets: ProjectManifestAsset[]
+}
+
+export interface ProjectSummary {
+  id: string
+  title: string
+  createdAt: string
+  updatedAt: string
+  panelCount: number
+  thumbnail: Blob | null
+  thumbnailUpdatedAt: string | null
+}
+
+export interface BackupPreferences {
+  enabled: boolean
+  rootHandle: FileSystemDirectoryHandle | null
+  projectFolders: Record<string, string>
+  lastBackupAt: Record<string, string>
+  lastHistoryAt: Record<string, string>
+}
+
+export type BackupPermissionState = PermissionState | 'unsupported'
+
+export type BackupStatus =
+  | 'unsupported'
+  | 'disabled'
+  | 'needs-permission'
+  | 'idle'
+  | 'scheduled'
+  | 'writing'
+  | 'error'

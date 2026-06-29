@@ -35,7 +35,7 @@ const faqs = [
   },
   {
     question: '可以在普通 HTTP 网站上运行吗？',
-    answer: '可以。应用为 UUID 和工程完整性校验提供了 HTTP 兼容后备方案；正式使用仍建议配置 HTTPS。',
+    answer: '可以。排版、浏览器自动保存和手动导出都支持 HTTP；只有“文件夹自动备份”需要 HTTPS（或 localhost）下的最新版 Chrome / Edge。',
   },
   {
     question: '适合手机使用吗？',
@@ -216,8 +216,8 @@ export function LandingPage({ onStart }: LandingPageProps) {
               <h3>原图留在你的电脑里</h3>
               <p>导入、布局、自动保存和导出均在浏览器本地完成。没有账号系统，也没有把实验图片发送到外部服务器的接口。</p>
               <ul>
-                <li><b>本地自动保存</b><span>刷新后恢复当前工程</span></li>
-                <li><b>工程文件备份</b><span>原图与设置打包为 .figgrid</span></li>
+                <li><b>本地工程中心</b><span>管理并恢复多个 Figure 工程</span></li>
+                <li><b>文件夹自动备份</b><span>停止编辑 2 秒后更新完整 .figgrid</span></li>
                 <li><b>完整性校验</b><span>导入工程时验证资源哈希</span></li>
               </ul>
             </div>

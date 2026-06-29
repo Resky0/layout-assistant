@@ -1,7 +1,7 @@
 import type { AcceptedMime, FigureStyle } from './types'
 
 export const APP_NAME = '论文图片排版助手'
-export const SCHEMA_VERSION = 1 as const
+export const SCHEMA_VERSION = 2 as const
 export const CANVAS_WIDTH = 1200
 export const MIN_PANEL_COUNT = 2
 export const MAX_PANEL_COUNT = 12
@@ -20,6 +20,10 @@ export const DEFAULT_STYLE: FigureStyle = {
   background: '#ffffff',
   labelMode: 'uppercase',
   labelPosition: 'top-left',
+  labelFont: 'arial',
+  labelWeight: 700,
+  labelOffsetX: 13,
+  labelOffsetY: 13,
   labelSize: 36,
   labelColor: '#111827',
 }

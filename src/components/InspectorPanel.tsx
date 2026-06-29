@@ -1,10 +1,16 @@
 import { EXPORT_WIDTH_PRESETS } from '../constants'
+import {
+  LABEL_FONT_OPTIONS,
+  LABEL_POSITION_OPTIONS,
+  getLabelFontFamily,
+} from '../lib/labels'
 import type {
   ExportSettings,
   FigureStyle,
   ImageAsset,
   PanelState,
 } from '../types'
+import type { FolderBackupController } from '../hooks/useFolderBackup'
 
 interface InspectorPanelProps {
   selectedAsset: ImageAsset | null
@@ -19,6 +25,8 @@ interface InspectorPanelProps {
   onExportChange: (patch: Partial<ExportSettings>) => void
   onExportPng: () => void
   onExportSvg: () => void
+  folderBackup: FolderBackupController
+  onOpenBackupSettings: () => void
 }
 
 function RangeRow({
@@ -72,7 +80,19 @@ export function InspectorPanel({
   onExportChange,
   onExportPng,
   onExportSvg,
+  folderBackup,
+  onOpenBackupSettings,
 }: InspectorPanelProps) {
+  const backupStatusText = {
+    unsupported: '当前环境不支持',
+    disabled: '未启用',
+    'needs-permission': '需要重新授权',
+    idle: '已备份',
+    scheduled: '等待备份',
+    writing: '正在备份…',
+    error: '备份失败',
+  }[folderBackup.status]
+
   return (
     <aside className="sidebar inspector-sidebar" aria-label="排版设置">
       <div className="sidebar-heading">
@@ -207,19 +227,50 @@ export function InspectorPanel({
             </select>
           </label>
           <label>
-            <span>位置</span>
+            <span>字体</span>
             <select
-              value={style.labelPosition}
+              value={style.labelFont}
               onChange={(event) =>
                 onStyleChange({
-                  labelPosition: event.target.value as FigureStyle['labelPosition'],
+                  labelFont: event.target.value as FigureStyle['labelFont'],
                 })
               }
             >
-              <option value="top-left">左上角</option>
-              <option value="top-right">右上角</option>
+              {LABEL_FONT_OPTIONS.map((option) => (
+                <option value={option.value} key={option.value}>
+                  {option.label}
+                </option>
+              ))}
             </select>
           </label>
+        </div>
+        <span className="field-label">位置</span>
+        <div className="label-position-grid">
+          {LABEL_POSITION_OPTIONS.map((option) => (
+            <button
+              type="button"
+              className={style.labelPosition === option.value ? 'is-active' : ''}
+              onClick={() => onStyleChange({ labelPosition: option.value })}
+              aria-label={`标签位置：${option.label}`}
+              key={option.value}
+            >
+              <i />
+              <span>{option.label}</span>
+            </button>
+          ))}
+        </div>
+        <span className="field-label">字重</span>
+        <div className="segmented-control">
+          {([400, 600, 700] as const).map((weight) => (
+            <button
+              type="button"
+              className={style.labelWeight === weight ? 'is-active' : ''}
+              onClick={() => onStyleChange({ labelWeight: weight })}
+              key={weight}
+            >
+              {weight === 400 ? '常规' : weight === 600 ? '半粗' : '粗体'}
+            </button>
+          ))}
         </div>
         <RangeRow
           label="字号"
@@ -229,6 +280,33 @@ export function InspectorPanel({
           unit=" px"
           onChange={(labelSize) => onStyleChange({ labelSize })}
         />
+        <RangeRow
+          label="水平边距"
+          value={style.labelOffsetX}
+          min={0}
+          max={120}
+          unit=" px"
+          onChange={(labelOffsetX) => onStyleChange({ labelOffsetX })}
+        />
+        <RangeRow
+          label="垂直边距"
+          value={style.labelOffsetY}
+          min={0}
+          max={120}
+          unit=" px"
+          onChange={(labelOffsetY) => onStyleChange({ labelOffsetY })}
+        />
+        <div
+          className="label-font-preview"
+          style={{
+            color: style.labelColor,
+            fontFamily: getLabelFontFamily(style.labelFont),
+            fontWeight: style.labelWeight,
+          }}
+          aria-label="标签字体预览"
+        >
+          Aa Bb Cc
+        </div>
         <label className="color-row">
           <span>颜色</span>
           <input
@@ -295,6 +373,81 @@ export function InspectorPanel({
         >
           {busyAction === 'svg' ? '正在生成 SVG…' : '导出可编辑 SVG'}
         </button>
+      </section>
+
+      <section className="inspector-section backup-section">
+        <div className="inspector-title">
+          <h3>文件夹备份</h3>
+          <span className={`backup-status backup-status-${folderBackup.status}`}>
+            <i />{backupStatusText}
+          </span>
+        </div>
+        {!folderBackup.loaded ? (
+          <p className="muted-copy">正在读取备份设置…</p>
+        ) : !folderBackup.supported ? (
+          <div className="backup-unavailable">
+            <strong>需要 HTTPS 和 Chrome / Edge</strong>
+            <p>当前工程仍会保存到浏览器，也可以手动下载 .figgrid。</p>
+          </div>
+        ) : (
+          <>
+            {folderBackup.rootFolderName ? (
+              <div className="backup-folder-card">
+                <span aria-hidden="true">⌂</span>
+                <div>
+                  <strong>{folderBackup.rootFolderName}</strong>
+                  <small>
+                    {folderBackup.projectFolderName
+                      ? `${folderBackup.projectFolderName}/latest.figgrid`
+                      : '将在首次写入时创建工程目录'}
+                  </small>
+                </div>
+              </div>
+            ) : (
+              <p className="muted-copy">
+                尚未配置磁盘备份，工程仍会自动保存到浏览器。
+              </p>
+            )}
+
+            {folderBackup.lastBackupAt && (
+              <p className="backup-time">
+                最近备份：{new Date(folderBackup.lastBackupAt).toLocaleString('zh-CN')}
+              </p>
+            )}
+            {folderBackup.error && (
+              <p className="backup-error" role="alert">{folderBackup.error}</p>
+            )}
+
+            {folderBackup.enabled && folderBackup.permission === 'granted' && (
+              <button
+                type="button"
+                className="primary-button backup-main-button"
+                onClick={() => void folderBackup.backupNow()}
+                disabled={folderBackup.status === 'writing'}
+              >
+                {folderBackup.status === 'writing' ? '正在备份…' : '立即备份'}
+              </button>
+            )}
+            <button
+              type="button"
+              className="secondary-button backup-settings-button"
+              onClick={onOpenBackupSettings}
+            >
+              {folderBackup.status === 'needs-permission'
+                ? '前往设置重新授权'
+                : '前往通用设置'}
+            </button>
+          </>
+        )}
+        {!folderBackup.supported && (
+          <button
+            type="button"
+            className="secondary-button backup-settings-button"
+            onClick={onOpenBackupSettings}
+          >
+            查看通用设置
+          </button>
+        )}
       </section>
     </aside>
   )

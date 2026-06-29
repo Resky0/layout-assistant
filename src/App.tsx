@@ -1,27 +1,36 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CandidatePicker } from './components/CandidatePicker'
+import { DashboardShell } from './components/DashboardShell'
 import { FigureCanvas } from './components/FigureCanvas'
+import { GeneralSettingsPage } from './components/GeneralSettingsPage'
 import { ImageSidebar } from './components/ImageSidebar'
 import { InspectorPanel } from './components/InspectorPanel'
 import { LandingPage } from './components/LandingPage'
+import { ProjectsPage } from './components/ProjectsPage'
 import { MIN_PANEL_COUNT } from './constants'
 import { useProjectHistory } from './hooks/useProjectHistory'
+import { useFolderBackup } from './hooks/useFolderBackup'
 import { createPngBlob, createSvgBlob, downloadBlob } from './lib/export'
 import { importImageFiles, replaceImageFile } from './lib/images'
 import { generateLayoutCandidates, solveLayout } from './lib/layout'
 import {
+  copyProjectAsNew,
   createEmptyProject,
   defaultPanelState,
+  normalizeProjectTitle,
   projectFileName,
 } from './lib/project'
 import { createFiggridBundle, readFiggridBundle } from './lib/project-file'
 import {
-  clearActiveProject,
-  loadActiveProject,
-  saveActiveProject,
+  getLastOpenProjectId,
+  loadProject,
+  saveProject,
+  saveProjectThumbnail,
+  setLastOpenProjectId,
 } from './lib/storage'
+import { createProjectThumbnail } from './lib/thumbnail'
 import type {
-  FigureProjectV1,
+  FigureProjectV2,
   FigureStyle,
   LayoutCandidate,
   PanelState,
@@ -32,15 +41,23 @@ interface Notice {
   text: string
 }
 
-function revokeProjectUrls(project: FigureProjectV1) {
+function revokeProjectUrls(project: FigureProjectV2) {
   project.assets.forEach((asset) => URL.revokeObjectURL(asset.previewUrl))
 }
 
 interface EditorAppProps {
-  onHome: () => void
+  projectId: string
+  onProjects: () => void
+  onSettings: () => void
+  onOpenProject: (projectId: string) => void
 }
 
-function EditorApp({ onHome }: EditorAppProps) {
+function EditorApp({
+  projectId,
+  onProjects,
+  onSettings,
+  onOpenProject,
+}: EditorAppProps) {
   const {
     project,
     commit,
@@ -56,6 +73,9 @@ function EditorApp({ onHome }: EditorAppProps) {
   const [hydrated, setHydrated] = useState(false)
   const [saveStatus, setSaveStatus] = useState('准备就绪')
   const projectInputRef = useRef<HTMLInputElement>(null)
+  const folderBackup = useFolderBackup(project, hydrated)
+  const latestProjectRef = useRef(project)
+  latestProjectRef.current = project
 
   const orderedAssets = useMemo(() => {
     const assetMap = new Map(project.assets.map((asset) => [asset.id, asset]))
@@ -94,15 +114,23 @@ function EditorApp({ onHome }: EditorAppProps) {
 
   useEffect(() => {
     let cancelled = false
-    loadActiveProject()
+    loadProject(projectId)
       .then((restored) => {
-        if (cancelled || !restored) return
+        if (cancelled) return
+        if (!restored) {
+          setNotice({ type: 'error', text: '工程不存在或已被删除。' })
+          window.setTimeout(onProjects, 0)
+          return
+        }
         replace(restored)
         setSelectedAssetId(restored.panelOrder[0] ?? null)
-        setNotice({ type: 'info', text: '已恢复上次未完成的工程。' })
+        void setLastOpenProjectId(restored.id)
       })
-      .catch(() => {
-        setNotice({ type: 'error', text: '自动保存的工程无法读取，已打开空白工程。' })
+      .catch((error: unknown) => {
+        const reason = error instanceof Error
+          ? error.message
+          : '自动保存的工程无法读取。'
+        setNotice({ type: 'error', text: `${reason} 已打开空白工程。` })
       })
       .finally(() => {
         if (!cancelled) setHydrated(true)
@@ -110,18 +138,46 @@ function EditorApp({ onHome }: EditorAppProps) {
     return () => {
       cancelled = true
     }
-  }, [replace])
+  }, [onProjects, projectId, replace])
 
   useEffect(() => {
     if (!hydrated) return
     setSaveStatus('正在保存…')
     const timer = window.setTimeout(() => {
-      saveActiveProject(project)
+      saveProject(project)
         .then(() => setSaveStatus('已自动保存'))
         .catch(() => setSaveStatus('自动保存失败'))
     }, 800)
     return () => window.clearTimeout(timer)
   }, [hydrated, project])
+
+  useEffect(() => {
+    if (!hydrated) return
+    const snapshot = project
+    const timer = window.setTimeout(() => {
+      createProjectThumbnail(snapshot)
+        .then((thumbnail) => saveProjectThumbnail(
+          snapshot.id,
+          snapshot.updatedAt,
+          thumbnail,
+        ))
+        .catch(() => undefined)
+    }, 2_000)
+    return () => window.clearTimeout(timer)
+  }, [hydrated, project])
+
+  useEffect(() => {
+    const saveBeforeLeaving = () => {
+      void saveProject(latestProjectRef.current)
+    }
+    window.addEventListener('hashchange', saveBeforeLeaving)
+    window.addEventListener('pagehide', saveBeforeLeaving)
+    return () => {
+      window.removeEventListener('hashchange', saveBeforeLeaving)
+      window.removeEventListener('pagehide', saveBeforeLeaving)
+      revokeProjectUrls(latestProjectRef.current)
+    }
+  }, [])
 
   useEffect(() => {
     const handleShortcut = (event: KeyboardEvent) => {
@@ -273,11 +329,35 @@ function EditorApp({ onHome }: EditorAppProps) {
     return solved
   }
 
+  const flushCurrentProject = async () => {
+    const snapshot = latestProjectRef.current
+    await saveProject(snapshot)
+    try {
+      const thumbnail = await createProjectThumbnail(snapshot)
+      await saveProjectThumbnail(snapshot.id, snapshot.updatedAt, thumbnail)
+    } catch {
+      // A stale or unavailable thumbnail must never block navigation.
+    }
+  }
+
+  const returnToProjects = async () => {
+    await folderBackup.backupNow()
+    await flushCurrentProject()
+    onProjects()
+  }
+
+  const openBackupSettings = async () => {
+    await folderBackup.backupNow()
+    await flushCurrentProject()
+    onSettings()
+  }
+
   const exportPng = async () => {
     const layout = requireSolved()
     if (!layout) return
     setBusyAction('png')
     try {
+      await folderBackup.backupNow()
       const blob = await createPngBlob(
         project,
         layout,
@@ -300,6 +380,7 @@ function EditorApp({ onHome }: EditorAppProps) {
     if (!layout) return
     setBusyAction('svg')
     try {
+      await folderBackup.backupNow()
       downloadBlob(
         await createSvgBlob(project, layout),
         projectFileName(project, 'svg'),
@@ -318,6 +399,7 @@ function EditorApp({ onHome }: EditorAppProps) {
   const saveProjectFile = async () => {
     setBusyAction('project')
     try {
+      await folderBackup.backupNow()
       const bundle = await createFiggridBundle(project)
       downloadBlob(bundle, projectFileName(project, 'figgrid'))
       setNotice({ type: 'success', text: '工程文件已保存。' })
@@ -332,19 +414,15 @@ function EditorApp({ onHome }: EditorAppProps) {
   }
 
   const openProjectFile = async (file: File) => {
-    if (
-      project.assets.length > 0 &&
-      !window.confirm('打开工程将替换当前内容。是否继续？')
-    ) {
-      return
-    }
     setBusyAction('open-project')
     try {
+      await folderBackup.backupNow()
       const restored = await readFiggridBundle(file)
-      revokeProjectUrls(project)
-      replace(restored)
-      setSelectedAssetId(restored.panelOrder[0] ?? null)
-      setNotice({ type: 'success', text: '工程文件已打开并通过完整性校验。' })
+      const imported = copyProjectAsNew(restored)
+      await saveProject(imported)
+      revokeProjectUrls(restored)
+      await setLastOpenProjectId(imported.id)
+      onOpenProject(imported.id)
     } catch (error) {
       setNotice({
         type: 'error',
@@ -357,17 +435,16 @@ function EditorApp({ onHome }: EditorAppProps) {
   }
 
   const newProject = async () => {
-    if (
-      project.assets.length > 0 &&
-      !window.confirm('新建工程会清空当前画布。建议先保存工程文件。是否继续？')
-    ) {
-      return
-    }
-    revokeProjectUrls(project)
-    replace(createEmptyProject())
-    setSelectedAssetId(null)
-    await clearActiveProject()
-    setNotice({ type: 'info', text: '已新建空白工程。' })
+    await folderBackup.backupNow()
+    await flushCurrentProject()
+    const next = createEmptyProject()
+    await saveProject(next)
+    await setLastOpenProjectId(next.id)
+    onOpenProject(next.id)
+  }
+
+  if (!hydrated) {
+    return <div className="route-loading">正在加载工程…</div>
   }
 
   return (
@@ -389,12 +466,21 @@ function EditorApp({ onHome }: EditorAppProps) {
           className="project-title-input"
           value={project.title}
           aria-label="工程名称"
+          maxLength={80}
           onChange={(event) =>
             commit((current) => ({ ...current, title: event.target.value }))
           }
+          onBlur={() => {
+            const title = normalizeProjectTitle(project.title)
+            if (title !== project.title) {
+              commit((current) => ({ ...current, title }))
+            }
+          }}
         />
         <div className="topbar-actions">
-          <button type="button" onClick={onHome}>首页</button>
+          <button type="button" onClick={() => void returnToProjects()}>
+            我的工程
+          </button>
           <span className="save-status"><i />{saveStatus}</span>
           <button type="button" onClick={undo} disabled={!canUndo} title="撤销">
             ↶ <span>撤销</span>
@@ -528,53 +614,137 @@ function EditorApp({ onHome }: EditorAppProps) {
           }
           onExportPng={() => void exportPng()}
           onExportSvg={() => void exportSvg()}
+          folderBackup={folderBackup}
+          onOpenBackupSettings={() => void openBackupSettings()}
         />
       </main>
     </div>
   )
 }
 
-function pageFromHash() {
-  return window.location.hash === '#editor' ? 'editor' : 'landing'
+type AppRoute =
+  | { page: 'landing' }
+  | { page: 'projects' }
+  | { page: 'settings' }
+  | { page: 'editor'; projectId: string | null }
+
+function routeFromHash(): AppRoute {
+  const hash = window.location.hash.replace(/^#\/?/, '')
+  if (hash === 'projects') return { page: 'projects' }
+  if (hash === 'settings') return { page: 'settings' }
+  if (hash === 'editor') return { page: 'editor', projectId: null }
+  if (hash.startsWith('editor/')) {
+    return { page: 'editor', projectId: hash.slice('editor/'.length) || null }
+  }
+  return { page: 'landing' }
 }
 
 export default function App() {
-  const [page, setPage] = useState(pageFromHash)
+  const [route, setRoute] = useState<AppRoute>(routeFromHash)
+
+  const navigate = useCallback((target: string) => {
+    if (target === 'landing') {
+      window.history.pushState(
+        null,
+        '',
+        `${window.location.pathname}${window.location.search}`,
+      )
+      setRoute({ page: 'landing' })
+      return
+    }
+    window.location.hash = target
+    setRoute(routeFromHash())
+  }, [])
+
+  const openProjects = useCallback(() => navigate('projects'), [navigate])
+  const openSettings = useCallback(() => navigate('settings'), [navigate])
+  const openProject = useCallback(
+    (projectId: string) => navigate(`editor/${projectId}`),
+    [navigate],
+  )
 
   useEffect(() => {
-    const syncPage = () => setPage(pageFromHash())
+    const syncPage = () => setRoute(routeFromHash())
     window.addEventListener('hashchange', syncPage)
     return () => window.removeEventListener('hashchange', syncPage)
   }, [])
 
   useEffect(() => {
-    const isLanding = page === 'landing'
+    if (route.page !== 'editor' || route.projectId) return
+    let cancelled = false
+    getLastOpenProjectId()
+      .then((projectId) => {
+        if (cancelled) return
+        if (projectId) openProject(projectId)
+        else openProjects()
+      })
+      .catch(() => {
+        if (!cancelled) openProjects()
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [openProject, openProjects, route])
+
+  useEffect(() => {
+    const isLanding = route.page === 'landing'
+    const isDashboard = route.page === 'projects' || route.page === 'settings'
     document.documentElement.classList.toggle('landing-active', isLanding)
     document.body.classList.toggle('landing-active', isLanding)
-    document.title = isLanding
+    document.documentElement.classList.toggle('dashboard-active', isDashboard)
+    document.body.classList.toggle('dashboard-active', isDashboard)
+    document.title = route.page === 'landing'
       ? '论文图片排版助手 - 本地科研多面板排图'
-      : '论文图片排版助手 - 排图工作台'
-    if (isLanding) {
+      : route.page === 'projects'
+        ? '我的工程 - 论文图片排版助手'
+        : route.page === 'settings'
+          ? '通用设置 - 论文图片排版助手'
+          : '论文图片排版助手 - 排图工作台'
+    if (isLanding || isDashboard) {
       document.documentElement.scrollTop = 0
       document.body.scrollTop = 0
     }
     return () => {
       document.documentElement.classList.remove('landing-active')
       document.body.classList.remove('landing-active')
+      document.documentElement.classList.remove('dashboard-active')
+      document.body.classList.remove('dashboard-active')
     }
-  }, [page])
+  }, [route.page])
 
-  const openEditor = () => {
-    window.location.hash = 'editor'
-    setPage('editor')
+  if (route.page === 'landing') {
+    return <LandingPage onStart={openProjects} />
   }
 
-  const openLanding = () => {
-    window.history.pushState(null, '', `${window.location.pathname}${window.location.search}`)
-    setPage('landing')
+  if (route.page === 'projects' || route.page === 'settings') {
+    return (
+      <DashboardShell
+        active={route.page}
+        onNavigate={(page) => navigate(page)}
+      >
+        {route.page === 'projects' ? (
+          <ProjectsPage
+            onOpenProject={openProject}
+            onOpenSettings={openSettings}
+          />
+        ) : (
+          <GeneralSettingsPage />
+        )}
+      </DashboardShell>
+    )
   }
 
-  return page === 'editor'
-    ? <EditorApp onHome={openLanding} />
-    : <LandingPage onStart={openEditor} />
+  if (!route.projectId) {
+    return <div className="route-loading">正在打开上次工程…</div>
+  }
+
+  return (
+    <EditorApp
+      key={route.projectId}
+      projectId={route.projectId}
+      onProjects={openProjects}
+      onSettings={openSettings}
+      onOpenProject={openProject}
+    />
+  )
 }

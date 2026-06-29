@@ -1,16 +1,16 @@
 import { useCallback, useState } from 'react'
-import type { FigureProjectV1 } from '../types'
+import type { FigureProjectV2 } from '../types'
 import { touchProject } from '../lib/project'
 
 interface HistoryState {
-  past: FigureProjectV1[]
-  present: FigureProjectV1
-  future: FigureProjectV1[]
+  past: FigureProjectV2[]
+  present: FigureProjectV2
+  future: FigureProjectV2[]
 }
 
 const HISTORY_LIMIT = 50
 
-export function useProjectHistory(initialProject: FigureProjectV1) {
+export function useProjectHistory(initialProject: FigureProjectV2) {
   const [history, setHistory] = useState<HistoryState>({
     past: [],
     present: initialProject,
@@ -18,7 +18,7 @@ export function useProjectHistory(initialProject: FigureProjectV1) {
   })
 
   const commit = useCallback(
-    (updater: (project: FigureProjectV1) => FigureProjectV1) => {
+    (updater: (project: FigureProjectV2) => FigureProjectV2) => {
       setHistory((current) => {
         const next = touchProject(updater(current.present))
         if (next === current.present) return current
@@ -32,7 +32,7 @@ export function useProjectHistory(initialProject: FigureProjectV1) {
     [],
   )
 
-  const replace = useCallback((project: FigureProjectV1) => {
+  const replace = useCallback((project: FigureProjectV2) => {
     setHistory({ past: [], present: project, future: [] })
   }, [])
 

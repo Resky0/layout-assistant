@@ -1,13 +1,14 @@
 import { useId } from 'react'
 import type {
-  FigureProjectV1,
+  FigureProjectV2,
   ImageAsset,
   SolvedLayout,
 } from '../types'
 import { getImageRenderRect, getPanelLabel } from '../lib/geometry'
+import { getLabelPlacement } from '../lib/labels'
 
 interface FigureCanvasProps {
-  project: FigureProjectV1
+  project: FigureProjectV2
   solved: SolvedLayout
   selectedAssetId?: string | null
   interactive?: boolean
@@ -61,13 +62,7 @@ export function FigureCanvas({
         const rect = getImageRenderRect(frame, asset, panel)
         const index = project.panelOrder.indexOf(asset.id)
         const label = getPanelLabel(index, project.style.labelMode)
-        const inset = Math.max(10, project.style.labelSize * 0.35)
-        const labelX =
-          project.style.labelPosition === 'top-left'
-            ? frame.x + inset
-            : frame.x + frame.width - inset
-        const anchor =
-          project.style.labelPosition === 'top-left' ? 'start' : 'end'
+        const placement = getLabelPlacement(frame, project.style)
 
         return (
           <g
@@ -87,12 +82,12 @@ export function FigureCanvas({
             />
             {label && !panel.hiddenLabel && (
               <text
-                x={labelX}
-                y={frame.y + inset + project.style.labelSize * 0.72}
-                textAnchor={anchor}
-                fontFamily="Arial, Helvetica, sans-serif"
+                x={placement.x}
+                y={placement.y}
+                textAnchor={placement.textAnchor}
+                fontFamily={placement.fontFamily}
                 fontSize={project.style.labelSize}
-                fontWeight="700"
+                fontWeight={placement.fontWeight}
                 fill={project.style.labelColor}
                 stroke="#ffffff"
                 strokeWidth={project.style.labelSize * 0.1}

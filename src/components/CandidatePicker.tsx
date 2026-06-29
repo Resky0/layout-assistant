@@ -1,12 +1,12 @@
 import type {
-  FigureProjectV1,
+  FigureProjectV2,
   LayoutCandidate,
   SolvedLayout,
 } from '../types'
 import { FigureCanvas } from './FigureCanvas'
 
 interface CandidatePickerProps {
-  project: FigureProjectV1
+  project: FigureProjectV2
   candidates: LayoutCandidate[]
   solvedCandidates: Map<string, SolvedLayout>
   onSelect: (candidate: LayoutCandidate) => void

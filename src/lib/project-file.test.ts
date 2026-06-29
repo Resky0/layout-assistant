@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { File as NodeFile } from 'node:buffer'
 import { describe, expect, it } from 'vitest'
+import { strToU8, zipSync } from 'fflate'
 import { createEmptyProject, defaultPanelState } from './project'
 import { createFiggridBundle, readFiggridBundle } from './project-file'
 
@@ -34,16 +35,65 @@ describe('.figgrid project files', () => {
     }) as unknown as File
     const restored = await readFiggridBundle(file)
 
-    expect(restored.schemaVersion).toBe(1)
+    expect(restored.schemaVersion).toBe(2)
     expect(restored.panelOrder).toEqual(source.panelOrder)
     expect(restored.assets.map((asset) => asset.name)).toEqual(
       source.assets.map((asset) => asset.name),
     )
     expect(restored.assets[0].blob.size).toBe(source.assets[0].blob.size)
+    expect(restored.style.labelFont).toBe('arial')
   })
 
   it('rejects a corrupt project file', async () => {
     const file = new NodeFile(['not-a-zip'], 'broken.figgrid') as unknown as File
     await expect(readFiggridBundle(file)).rejects.toThrow()
+  })
+
+  it('migrates a V1 project and preserves its previous label inset', async () => {
+    const legacyManifest = {
+      schemaVersion: 1,
+      id: 'legacy-project',
+      title: 'Legacy Figure',
+      createdAt: '2025-01-01T00:00:00.000Z',
+      updatedAt: '2025-01-01T00:00:00.000Z',
+      assets: [],
+      panelOrder: [],
+      panels: {},
+      layoutProfile: 'classic',
+      style: {
+        gap: 20,
+        padding: 24,
+        background: '#ffffff',
+        labelMode: 'uppercase',
+        labelPosition: 'top-right',
+        labelSize: 40,
+        labelColor: '#111827',
+      },
+      exportSettings: { width: 3000 },
+    }
+    const zipped = zipSync({
+      'manifest.json': strToU8(JSON.stringify(legacyManifest)),
+    })
+    const file = new NodeFile([zipped], 'legacy.figgrid', {
+      type: 'application/x-figgrid',
+    }) as unknown as File
+
+    const restored = await readFiggridBundle(file)
+
+    expect(restored.schemaVersion).toBe(2)
+    expect(restored.style.labelFont).toBe('arial')
+    expect(restored.style.labelWeight).toBe(700)
+    expect(restored.style.labelPosition).toBe('top-right')
+    expect(restored.style.labelOffsetX).toBe(14)
+    expect(restored.style.labelOffsetY).toBe(14)
+  })
+
+  it('rejects project versions newer than the current schema', async () => {
+    const zipped = zipSync({
+      'manifest.json': strToU8(JSON.stringify({ schemaVersion: 3 })),
+    })
+    const file = new NodeFile([zipped], 'future.figgrid') as unknown as File
+
+    await expect(readFiggridBundle(file)).rejects.toThrow('版本不受支持')
   })
 })

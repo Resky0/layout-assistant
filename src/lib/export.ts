@@ -1,10 +1,11 @@
 import type {
-  FigureProjectV1,
+  FigureProjectV2,
   ImageAsset,
   PanelFrame,
   SolvedLayout,
 } from '../types'
 import { getImageRenderRect, getPanelLabel } from './geometry'
+import { getLabelPlacement } from './labels'
 
 const MAX_EXPORT_PIXELS = 80_000_000
 const MAX_EXPORT_DIMENSION = 16_384
@@ -35,7 +36,7 @@ async function getEmbeddedAssets(assets: ImageAsset[]) {
 }
 
 function imageMarkup(
-  project: FigureProjectV1,
+  project: FigureProjectV2,
   asset: ImageAsset,
   frame: PanelFrame,
   href: string,
@@ -50,7 +51,7 @@ function imageMarkup(
 }
 
 export async function buildSvgString(
-  project: FigureProjectV1,
+  project: FigureProjectV2,
   solved: SolvedLayout,
 ) {
   const embedded = await getEmbeddedAssets(project.assets)
@@ -69,15 +70,8 @@ export async function buildSvgString(
       const index = project.panelOrder.indexOf(frame.assetId)
       const label = getPanelLabel(index, project.style.labelMode)
       if (!label || panel.hiddenLabel) return ''
-      const inset = Math.max(10, project.style.labelSize * 0.35)
-      const x =
-        project.style.labelPosition === 'top-left'
-          ? frame.x + inset
-          : frame.x + frame.width - inset
-      const anchor =
-        project.style.labelPosition === 'top-left' ? 'start' : 'end'
-      const y = frame.y + inset + project.style.labelSize * 0.72
-      return `<text x="${x}" y="${y}" text-anchor="${anchor}" font-family="Arial, Helvetica, sans-serif" font-size="${project.style.labelSize}" font-weight="700" fill="${escapeXml(project.style.labelColor)}" stroke="#ffffff" stroke-width="${project.style.labelSize * 0.1}" paint-order="stroke fill">${label}</text>`
+      const placement = getLabelPlacement(frame, project.style)
+      return `<text x="${placement.x}" y="${placement.y}" text-anchor="${placement.textAnchor}" font-family="${escapeXml(placement.fontFamily)}" font-size="${project.style.labelSize}" font-weight="${placement.fontWeight}" fill="${escapeXml(project.style.labelColor)}" stroke="#ffffff" stroke-width="${project.style.labelSize * 0.1}" paint-order="stroke fill">${label}</text>`
     })
     .join('')
 
@@ -113,7 +107,7 @@ export async function buildSvgString(
 }
 
 export async function createSvgBlob(
-  project: FigureProjectV1,
+  project: FigureProjectV2,
   solved: SolvedLayout,
 ) {
   return new Blob([await buildSvgString(project, solved)], {
@@ -138,9 +132,19 @@ function loadSvgImage(blob: Blob): Promise<HTMLImageElement> {
 }
 
 export async function createPngBlob(
-  project: FigureProjectV1,
+  project: FigureProjectV2,
   solved: SolvedLayout,
   outputWidth: number,
+) {
+  return createRasterBlob(project, solved, outputWidth, 'image/png')
+}
+
+export async function createRasterBlob(
+  project: FigureProjectV2,
+  solved: SolvedLayout,
+  outputWidth: number,
+  mime: 'image/png' | 'image/webp',
+  quality?: number,
 ) {
   const outputHeight = Math.round((solved.height / solved.width) * outputWidth)
   if (
@@ -162,7 +166,8 @@ export async function createPngBlob(
   return new Promise<Blob>((resolve, reject) => {
     canvas.toBlob(
       (blob) => (blob ? resolve(blob) : reject(new Error('PNG 编码失败。'))),
-      'image/png',
+      mime,
+      quality,
     )
   })
 }
